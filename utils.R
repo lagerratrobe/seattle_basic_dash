@@ -1,27 +1,35 @@
 library(dplyr, warn.conflicts = FALSE)
 library(lubridate, warn.conflicts = FALSE)
+library(arrow, warn.conflicts = FALSE)
 
-# Read in the entire data and convert obsTimeLocal to POSIXct data type
+# Read last ~48 hours of weather data from GCS parquet files
 getData <- function() {
-  df <- readRDS(
-    url("https://github.com/lagerratrobe/weather_station/raw/main/Data/station_obs.RDS")) |> 
-    filter(stationID == "KWASEATT2743") |>
-    mutate(stationID,
-           "Time" = lubridate::parse_date_time(
-             obsTimeLocal,
-             "Ymd HMS",
-             tz = "UTC",
-             truncated = 0,
-             quiet = FALSE,
-             exact = FALSE) ,
-           "Temperature" = imperial.temp,
-           "Precip" = imperial.precipTotal,
-           "SolarWatts" = solarRadiation,
-           "Humidity" = humidity,
-           "Pressure" = imperial.pressure,
-           .keep = "none") |>
-    arrange(desc(Time)) %>% 
-    head(n=48)
+  base_url <- "https://storage.googleapis.com/weatherdata-parquet-randre/weather_"
+
+  dates <- Sys.Date() - 0:2
+  urls <- paste0(base_url, format(dates, "%Y-%m-%d"), ".parquet")
+
+  frames <- list()
+  for (url in urls) {
+    tryCatch({
+      frames[[length(frames) + 1]] <- arrow::read_parquet(url)
+    }, error = function(e) {
+      message("Skipping missing file: ", url)
+    })
+  }
+
+  df <- bind_rows(frames) |>
+    transmute(
+      Time = as.POSIXct(timestamp, format = "%Y-%m-%dT%H:%M:%OS", tz = "UTC"),
+      Temperature = tempf,
+      Precip = dailyrainin,
+      SolarWatts = solarradiation,
+      Humidity = humidity,
+      Pressure = baromrelin
+    ) |>
+    arrange(desc(Time)) |>
+    head(n = 48)
+
   return(df)
 }
 
@@ -59,7 +67,7 @@ getPlot <- function(weather_data, weather_variable) {
       annotate("text",
                x=time_now,
                y=current_temp + .5,
-               label=sprintf("Now = %d deg", current_temp),
+               label=sprintf("Now = %.0f deg", current_temp),
                color="darkgreen") +
       # Midnight times
       geom_vline(xintercept=midnight,color="grey35") +

@@ -2,6 +2,7 @@ library(shiny)
 library(ggplot2)
 library(DT)
 library(dplyr)
+library(arrow)
 source("utils.R")
 
 # Pull in the last 48 hours of Seattle data
