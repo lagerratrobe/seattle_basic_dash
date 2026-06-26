@@ -20,7 +20,7 @@ getData <- function() {
 
   df <- bind_rows(frames) |>
     transmute(
-      Time = as.POSIXct(timestamp, format = "%Y-%m-%dT%H:%M:%OS", tz = "UTC"),
+      Time = with_tz(as.POSIXct(timestamp, format = "%Y-%m-%dT%H:%M:%OS", tz = "UTC"), "America/Los_Angeles"),
       Temperature = tempf,
       Precip = dailyrainin,
       SolarWatts = solarradiation,
